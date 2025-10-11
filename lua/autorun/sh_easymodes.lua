@@ -1,6 +1,6 @@
 EasyModes = EasyModes or {}
-EasyModes.MODE_PVP = 2
-EasyModes.MODE_BUILD = 1
+EasyModes.MODE_PVP = 1
+EasyModes.MODE_BUILD = 2
 EasyModes.NetworkString = "EasyModes"
 
 if SERVER then
@@ -47,4 +47,5 @@ hook_Add("ScalePlayerDamage", "EasyModesScaleDamage", function(target, hitgroup,
             return true
         end
     end
+
 end)
