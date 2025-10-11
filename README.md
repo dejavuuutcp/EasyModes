@@ -1,0 +1,2 @@
+# EasyModes
+another useless addon🤮
