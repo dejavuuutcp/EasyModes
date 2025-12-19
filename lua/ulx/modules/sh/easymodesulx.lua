@@ -1,92 +1,62 @@
 if not ulx then
-    print("ULX not found")
+    print("[EasyModes] ULX not found, commands disabled")
     return
 end
 
 local CATEGORY = "EasyModes"
-
-local tostring = tostring
+local tostr = tostring
 local RunConsoleCommand = RunConsoleCommand
 local GetConVar = GetConVar
-local ULib_tsayError = ULib.tsayError
-local ulx_command = ulx.command
-local UL_ACCESS_ALL = ULib.ACCESS_ALL
-local UL_ACCESS_SUPERADMIN = ULib.ACCESS_SUPERADMIN
+local tsayErr = ULib.tsayError
+local ulx_cmd = ulx.command
+local ALL = ULib.ACCESS_ALL
+local SA = ULib.ACCESS_SUPERADMIN
 
-local function switchMode(calling_ply, mode, modeName)
-    if not calling_ply:SetGameMode(mode) then
-        ULib_tsayError(calling_ply, "Please wait before switching modes again", true)
-        return
+local function switchMode(ply, mode)
+    if not ply:SetGameMode(mode) then
+        tsayErr(ply, "Please wait before switching modes again", true)
     end
 end
 
-function ulx.build(calling_ply)
-    switchMode(calling_ply, EasyModes.MODE_BUILD, "BUILD")
+function ulx.build(ply)
+    switchMode(ply, EasyModes.MODE_BUILD)
 end
 
-function ulx.pvp(calling_ply)
-    switchMode(calling_ply, EasyModes.MODE_PVP, "PVP")
+function ulx.pvp(ply)
+    switchMode(ply, EasyModes.MODE_PVP)
 end
 
-function ulx.setcooldown(calling_ply, seconds)
-    RunConsoleCommand("easymodes_cooldown", tostring(seconds))
-    ulx.fancyLogAdmin(calling_ply, "#A set EasyModes cooldown to #i second(s)", seconds)
+function ulx.setcooldown(ply, secs)
+    RunConsoleCommand("easymodes_cooldown", tostr(secs))
+    ulx.fancyLogAdmin(ply, "#A set EasyModes cooldown to #i second(s)", secs)
 end
 
-local function toggleConVar(calling_ply, convarName, messageEnabled, messageDisabled)
-    local cvar = GetConVar(convarName)
-    local newValue = not cvar:GetBool()
-    RunConsoleCommand(convarName, newValue and "1" or "0")
-
-    if newValue then
-        ulx.fancyLogAdmin(calling_ply, messageEnabled)
-    else
-        ulx.fancyLogAdmin(calling_ply, messageDisabled)
-    end
+local function toggleCvar(ply, cvar, msgOn, msgOff)
+    local cv = GetConVar(cvar)
+    local val = not cv:GetBool()
+    RunConsoleCommand(cvar, val and "1" or "0")
+    ulx.fancyLogAdmin(ply, val and msgOn or msgOff)
 end
 
-function ulx.toggle_buildnoclip(calling_ply)
-    toggleConVar(
-        calling_ply, 
-        "easymodes_build_noclip", 
-        "#A enabled noclip in BUILD mode", 
-        "#A disabled noclip in BUILD mode"
-    )
+function ulx.toggle_buildnoclip(ply)
+    toggleCvar(ply, "easymodes_build_noclip", "#A enabled noclip in BUILD mode", "#A disabled noclip in BUILD mode")
 end
 
-function ulx.toggle_respawnpvp(calling_ply)
-    toggleConVar(
-        calling_ply,
-        "easymodes_respawn_on_pvp",
-        "#A enabled auto-respawn on switching to PVP mode",
-        "#A disabled auto-respawn on switching to PVP mode"
-    )
+function ulx.toggle_respawnpvp(ply)
+    toggleCvar(ply, "easymodes_respawn_on_pvp", "#A enabled auto-respawn on PVP switch", "#A disabled auto-respawn on PVP switch")
 end
 
-local commands = {
-    {func = ulx.build,       cmd = "ulx build",       chat = "!build",       access = UL_ACCESS_ALL,        help = [[Switches your mode to BUILD mode.
-• You cannot take or deal any damage.
-• Noclip is enabled (if allowed in the config).
-• Your props and constructions are protected from damage.
-• Ideal for building safely without PvP interruptions.]]},
-
-    {func = ulx.pvp,         cmd = "ulx pvp",         chat = "!pvp",         access = UL_ACCESS_ALL,        help = [[Switches your mode to PVP mode.
-• You can deal and receive damage from other players.
-• Noclip and building protections are disabled.
-• Suitable for PvP.]]},
-
-    {func = ulx.setcooldown, cmd = "ulx setcooldown", chat = "!setcooldown", access = UL_ACCESS_SUPERADMIN, help = [[Sets the cooldown (in seconds) between mode switches. Default: 1 second.]], params = { type = ULib.cmds.NumArg, min = 0, max = 1000, hint = "seconds" }},
-
-    {func = ulx.toggle_buildnoclip, cmd = "ulx buildnoclip", chat = "!buildnoclip", access = UL_ACCESS_SUPERADMIN, help = "Toggles noclip in BUILD mode"},
-
-    {func = ulx.toggle_respawnpvp, cmd = "ulx respawnpvp", chat = "!respawnpvp", access = UL_ACCESS_SUPERADMIN, help = "Toggles auto-respawn when switching to PVP mode"}
+local cmds = {
+    {func = ulx.build, cmd = "ulx build", chat = "!build", access = ALL, help = "Switch to BUILD mode (no damage, noclip enabled)"},
+    {func = ulx.pvp, cmd = "ulx pvp", chat = "!pvp", access = ALL, help = "Switch to PVP mode (damage enabled, noclip disabled)"},
+    {func = ulx.setcooldown, cmd = "ulx setcooldown", chat = "!setcooldown", access = SA, help = "Set mode switch cooldown in seconds", params = {type = ULib.cmds.NumArg, min = 0, max = 1000, hint = "seconds"}},
+    {func = ulx.toggle_buildnoclip, cmd = "ulx buildnoclip", chat = "!buildnoclip", access = SA, help = "Toggle noclip in BUILD mode"},
+    {func = ulx.toggle_respawnpvp, cmd = "ulx respawnpvp", chat = "!respawnpvp", access = SA, help = "Toggle auto-respawn when switching to PVP"}
 }
 
-for _, data in ipairs(commands) do
-    local c = ulx_command(CATEGORY, data.cmd, data.func, data.chat)
-    c:defaultAccess(data.access)
-    c:help(data.help)
-    if data.params then
-        c:addParam(data.params)
-    end
+for _, d in ipairs(cmds) do
+    local c = ulx_cmd(CATEGORY, d.cmd, d.func, d.chat)
+    c:defaultAccess(d.access)
+    c:help(d.help)
+    if d.params then c:addParam(d.params) end
 end
