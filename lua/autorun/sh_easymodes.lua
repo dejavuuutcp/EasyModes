@@ -25,27 +25,3 @@ end
 function PLAYER:PVPMode()
     return self:GetMode() == EasyModes.MODE_PVP
 end
-
-hook_Add("ScalePlayerDamage", "EasyModesScaleDamage", function(target, hitgroup, dmgInfo)
-    if target:BuildMode() then
-        return true
-    end
-
-    local attacker = dmgInfo:GetAttacker()
-    if IsValid(attacker) and attacker:IsPlayer() and attacker:BuildMode() then
-        return true
-    end
-
-    local inflictor = dmgInfo:GetInflictor()
-    if IsValid(inflictor) then
-        if inflictor:IsPlayer() and inflictor:BuildMode() then
-            return true
-        end
-
-        local owner = inflictor:GetOwner()
-        if IsValid(owner) and owner:IsPlayer() and owner:BuildMode() then
-            return true
-        end
-    end
-
-end)
