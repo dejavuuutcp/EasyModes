@@ -3,7 +3,7 @@ if CLIENT then return end
 local CurTime = CurTime
 local timer_Simple = timer.Simple
 local IsValid = IsValid
-local string_format = string.format
+local fmt = string.format
 local net_Start = net.Start
 local net_WriteBool = net.WriteBool
 local net_WriteUInt = net.WriteUInt
@@ -12,6 +12,9 @@ local hook_Add = hook.Add
 local CreateConVar = CreateConVar
 local print = print
 local FindMetaTable = FindMetaTable
+local ErrorNoHalt = ErrorNoHalt
+local tinsert = table.insert
+local tremove = table.remove
 
 local Config = {
     SwitchCooldown = CreateConVar("easymodes_cooldown", "1", {FCVAR_ARCHIVE, FCVAR_NOTIFY},
@@ -25,42 +28,60 @@ local Config = {
 local PLAYER = FindMetaTable("Player")
 
 function PLAYER:SetGameMode(mode, silent)
-    assert(mode == EasyModes.MODE_PVP or mode == EasyModes.MODE_BUILD,
-        "Invalid mode! Use EasyModes.MODE_PVP or EasyModes.MODE_BUILD")
-
-    local currentMode = self:GetMode()
-    if currentMode == mode then return false end
-
-    local lastSwitch = self.LastModeSwitch or 0
-    local cooldown = Config.SwitchCooldown:GetFloat()
-    if CurTime() - lastSwitch < cooldown then
+    if mode ~= EasyModes.MODE_PVP and mode ~= EasyModes.MODE_BUILD then
+        ErrorNoHalt(fmt("[EasyModes] Invalid mode for %s (%s)\n", self:Nick(), self:SteamID()))
+        return false
+    end
+    
+    local curr = self:GetMode()
+    if curr == mode then return false end
+    
+    self.ModeSwitchAttempts = self.ModeSwitchAttempts or {}
+    
+    for i = #self.ModeSwitchAttempts, 1, -1 do
+        if CurTime() - self.ModeSwitchAttempts[i] > 5 then
+            tremove(self.ModeSwitchAttempts, i)
+        end
+    end
+    
+    if #self.ModeSwitchAttempts > 10 then
+        self:Kick("EasyModes: Mode switch spam detected")
+        ErrorNoHalt(fmt("[EasyModes] %s (%s) kicked for spam\n", self:Nick(), self:SteamID()))
+        return false
+    end
+    
+    tinsert(self.ModeSwitchAttempts, CurTime())
+    
+    local last = self.LastModeSwitch or 0
+    local cd = Config.SwitchCooldown:GetFloat()
+    if CurTime() - last < cd then
         if not silent then
             self:SendModeNotification(false, mode)
         end
         return false
     end
-
+    
     self:SetNWInt("PlayerMode", mode)
     self.LastModeSwitch = CurTime()
-
+    
     if not silent then
         self:SendModeNotification(true, mode)
     end
-
+    
     if mode == EasyModes.MODE_PVP and Config.RespawnOnPVP:GetBool() then
         self:KillSilent()
-        timer_Simple(0.05, function()
+        timer_Simple(0.1, function()
             if IsValid(self) and not self:Alive() then
                 self:Spawn()
             end
         end)
     end
-
-    local oldName = (currentMode == EasyModes.MODE_BUILD) and "BUILD" or "PVP"
-    local newName = (mode == EasyModes.MODE_BUILD) and "BUILD" or "PVP"
-    print(string_format("[EasyModes] %s (%s) switched from %s to %s", 
-        self:Nick(), self:SteamID(), oldName, newName))
-
+    
+    local old = (curr == EasyModes.MODE_BUILD) and "BUILD" or "PVP"
+    local new = (mode == EasyModes.MODE_BUILD) and "BUILD" or "PVP"
+    print(fmt("[EasyModes] %s (%s) switched from %s to %s",
+        self:Nick(), self:SteamID(), old, new))
+    
     return true
 end
 
@@ -71,38 +92,42 @@ function PLAYER:SendModeNotification(success, mode)
     net_Send(self)
 end
 
-hook_Add("PlayerNoClip", "EasyModesNoclip", function(ply, desiredState)
+hook_Add("EntityTakeDamage", "EasyModesEntityDamage", function(target, dmg)
+    if target:IsPlayer() and target:BuildMode() then 
+        return true 
+    end
+    
+    local atk = dmg:GetAttacker()
+    if IsValid(atk) and atk:IsPlayer() and atk:BuildMode() then
+        return true
+    end
+    
+    local inf = dmg:GetInflictor()
+    if IsValid(inf) then
+        local own = inf:GetOwner()
+        if IsValid(own) and own:IsPlayer() and own:BuildMode() then
+            return true
+        end
+    end
+end)
+
+hook_Add("PlayerNoClip", "EasyModesNoclip", function(ply, state)
+    if not IsValid(ply) then return false end
+    
     if ply:BuildMode() and Config.AllowNoclip:GetBool() then
         return true
     end
+    
     if ply:PVPMode() then
-        return false
-    end
-end)
-
-hook_Add("PlayerShouldTakeDamage", "EasyModesDamage", function(target, attacker)
-    if target:BuildMode() then return false end
-    if IsValid(attacker) and attacker:IsPlayer() and attacker:BuildMode() then
-        return false
-    end
-end)
-
-hook_Add("EntityTakeDamage", "EasyModesEntityDamage", function(target, dmgInfo)
-    local attacker = dmgInfo:GetAttacker()
-    if IsValid(attacker) and attacker:IsPlayer() and attacker:BuildMode() then
-        return true
-    end
-
-    local inflictor = dmgInfo:GetInflictor()
-    if IsValid(inflictor) then
-        local owner = inflictor:GetOwner()
-        if IsValid(owner) and owner:IsPlayer() and owner:BuildMode() then
-            return true
+        if state then
+            ply:ChatPrint("[EasyModes] Noclip is disabled in PVP mode!")
         end
+        return false
     end
 end)
 
 hook_Add("PlayerInitialSpawn", "EasyModesInitialize", function(ply)
     ply:SetNWInt("PlayerMode", EasyModes.MODE_PVP)
     ply.LastModeSwitch = 0
+    ply.ModeSwitchAttempts = {}
 end)
